@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tv7 - DX7 to Tonverk Multisample Generator</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        h1 {
+            color: #00ff00;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+        }
+
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #2a2a2a;
+            border-radius: 5px;
+            border: 1px solid #3a3a3a;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #00ff00;
+            font-weight: bold;
+        }
+
+        input[type="file"] {
+            margin-bottom: 15px;
+            padding: 8px;
+            border: 1px solid #00ff00;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border-radius: 3px;
+            width: 100%;
+        }
+
+        input[type="number"] {
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #00ff00;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border-radius: 3px;
+            width: 100px;
+        }
+
+        .patch-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #3a3a3a;
+            border-radius: 3px;
+            background: #1a1a1a;
+        }
+
+        .patch-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .patch-item:hover {
+            background: #3a3a3a;
+        }
+
+        .patch-item.selected {
+            background: #004400;
+        }
+
+        .patch-number {
+            color: #888;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .patch-name {
+            flex-grow: 1;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #00ff00;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #00cc00;
+        }
+
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .param-group {
+            margin: 15px 0;
+        }
+
+        .param-label {
+            color: #888;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 3px;
+            display: none;
+        }
+
+        #status.info {
+            display: block;
+            background: #003366;
+            border: 1px solid #0066cc;
+        }
+
+        #status.success {
+            display: block;
+            background: #003300;
+            border: 1px solid #00ff00;
+        }
+
+        #status.error {
+            display: block;
+            background: #330000;
+            border: 1px solid #ff0000;
+            color: #ff6666;
+        }
+    </style>
+</head>
+<body>
+    <h1>tv7 - DX7 to Tonverk Multisample Generator</h1>
+
+    <div class="section">
+        <label for="sysex-file">Upload DX7 SYSEX Bank File (.syx)</label>
+        <input type="file" id="sysex-file" accept=".syx">
+    </div>
+
+    <div class="section" id="patch-section" style="display: none;">
+        <label>Select Patch</label>
+        <div class="patch-list" id="patch-list"></div>
+    </div>
+
+    <div class="section" id="controls-section" style="display: none;">
+        <h3>Multisample Parameters</h3>
+
+        <div class="param-group">
+            <label>Key-On Duration (ms)</label>
+            <input type="number" id="duration" value="2000" min="100" max="10000" step="100">
+        </div>
+
+        <div class="param-group">
+            <label>MIDI Note Range</label>
+            <span class="param-label">Min:</span>
+            <input type="number" id="min-note" value="60" min="0" max="127">
+            <span class="param-label">Max:</span>
+            <input type="number" id="max-note" value="108" min="0" max="127">
+            <span class="param-label">Increment:</span>
+            <input type="number" id="note-increment" value="3" min="1" max="12">
+        </div>
+
+        <div class="controls">
+            <button id="play-btn" disabled>Play Preview (Note 60)</button>
+            <button id="download-btn" disabled>Download Multisample</button>
+        </div>
+    </div>
+
+    <div id="status"></div>
+
+    <!-- Load JSZip from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script type="module">
+        import { PatchBank, generateSamples } from './src/dx7.js';
+
+        let patchBank = null;
+        let selectedPatch = null;
+        let audioContext = null;
+
+        // Inline multisample generation functions to avoid JSZip module import issues
+        function tonverkSanitize(input) {
+            const allowedSymbols = ['~', '!', '@', '#', '$', '%', '^', '&', '(', ')', '_', '+', '-', '=', ' '];
+            const allowedLetters = ['å', 'ß', 'ä', 'ö', 'ü', 'æ', 'ø', 'ç', 'ñ', 'Å', 'ẞ', 'Ä', 'Ö', 'Ü', 'Æ', 'Ø', 'Ç', 'Ñ'];
+            return input
+                .split('')
+                .filter(c => {
+                    const code = c.charCodeAt(0);
+                    const isAsciiAlphanumeric = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+                    return isAsciiAlphanumeric || allowedSymbols.includes(c) || allowedLetters.includes(c);
+                })
+                .join('');
+        }
+
+        function generateWav(pitchBuffers, sampleRate) {
+            const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
+            const totalSamples = maxLength * pitchBuffers.length;
+            const dataSize = totalSamples * 4;
+            const fileSize = 44 + dataSize;
+            const buffer = new ArrayBuffer(fileSize);
+            const view = new DataView(buffer);
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, fileSize - 8, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 3, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 4, true);
+            view.setUint16(32, 4, true);
+            view.setUint16(34, 32, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataSize, true);
+
+            let offset = 44;
+            for (const pitchBuffer of pitchBuffers) {
+                for (let i = 0; i < pitchBuffer.length; i++) {
+                    view.setFloat32(offset, pitchBuffer[i], true);
+                    offset += 4;
+                }
+                for (let i = pitchBuffer.length; i < maxLength; i++) {
+                    view.setFloat32(offset, 0.0, true);
+                    offset += 4;
+                }
+            }
+
+            return new Uint8Array(buffer);
+        }
+
+        function generateElmulti(name, zones) {
+            let toml = `# ELEKTRON MULTI-SAMPLE MAPPING FORMAT\nversion = 0\nname = '${name}'\n`;
+            zones.forEach((zone, index) => {
+                const isLast = index === zones.length - 1;
+                toml += `\n[[key-zones]]\npitch = ${zone.pitch}\nkey-center = ${zone.pitch}.0\n\n`;
+                toml += `[[key-zones.velocity-layers]]\nvelocity = 0.9960785\nstrategy = 'Forward'\n\n`;
+                toml += `[[key-zones.velocity-layers.sample-slots]]\nsample = '${name}.wav'\ntrim-start = ${zone.start}\n`;
+                if (!isLast) {
+                    toml += `trim-end = ${zone.end}\n`;
+                }
+            });
+            return toml;
+        }
+
+        async function generateMultisample(patch, midiNotes, sampleRate, durationMs) {
+            console.log('generateMultisample called with:', { patch: patch.getName(), midiNotes, sampleRate, durationMs });
+            const name = tonverkSanitize(patch.getName());
+            const pitchBuffers = [];
+            const zones = [];
+            let runningSampleCount = 0;
+
+            for (const midiNote of midiNotes) {
+                console.log(`Generating samples for note ${midiNote}...`);
+                const samples = generateSamples(patch, midiNote, sampleRate, durationMs);
+                console.log(`Generated ${samples.length} samples`);
+                pitchBuffers.push(samples);
+                const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
+                const start = runningSampleCount;
+                const end = start + maxLength;
+                runningSampleCount = end;
+                zones.push({ pitch: midiNote, start, end });
+            }
+
+            // Find peak amplitude across all buffers (iteratively to avoid stack overflow)
+            let peak = 0.0;
+            for (const buffer of pitchBuffers) {
+                for (let i = 0; i < buffer.length; i++) {
+                    const abs = Math.abs(buffer[i]);
+                    if (abs > peak) peak = abs;
+                }
+            }
+
+            // Normalize with headroom
+            const normalizeFactor = peak > 0.8 ? 0.8 / peak : 1.0;
+            for (const buffer of pitchBuffers) {
+                for (let i = 0; i < buffer.length; i++) {
+                    buffer[i] *= normalizeFactor;
+                }
+            }
+
+            const wavData = generateWav(pitchBuffers, sampleRate);
+            const tomlData = generateElmulti(name, zones);
+            const zip = new JSZip();
+            const folder = zip.folder(name);
+            folder.file(`${name}.wav`, wavData);
+            folder.file(`${name}.elmulti`, tomlData);
+            return await zip.generateAsync({ type: 'blob' });
+        }
+
+        // DOM elements
+        const sysexFileInput = document.getElementById('sysex-file');
+        const patchSection = document.getElementById('patch-section');
+        const patchList = document.getElementById('patch-list');
+        const controlsSection = document.getElementById('controls-section');
+        const playBtn = document.getElementById('play-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const statusDiv = document.getElementById('status');
+
+        function showStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = type;
+        }
+
+        // Handle SYSEX file upload
+        sysexFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                showStatus('Loading SYSEX file...', 'info');
+                console.log('Loading file:', file.name, file.size, 'bytes');
+
+                const arrayBuffer = await file.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                console.log('File loaded, creating PatchBank...');
+
+                patchBank = new PatchBank(bytes);
+                console.log('PatchBank created with', patchBank.patches.length, 'patches');
+
+                displayPatches();
+                showStatus(`Loaded ${patchBank.patches.length} patches`, 'success');
+            } catch (error) {
+                showStatus(`Error loading SYSEX file: ${error.message}`, 'error');
+                console.error('Full error:', error);
+                console.error('Stack:', error.stack);
+            }
+        });
+
+        function displayPatches() {
+            patchList.innerHTML = '';
+            patchSection.style.display = 'block';
+
+            patchBank.patches.forEach((patch, index) => {
+                const item = document.createElement('div');
+                item.className = 'patch-item';
+                item.innerHTML = `
+                    <span class="patch-number">${index}:</span>
+                    <span class="patch-name">${patch.getName()}</span>
+                `;
+
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.patch-item').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+                    item.classList.add('selected');
+                    selectedPatch = patch;
+                    controlsSection.style.display = 'block';
+                    playBtn.disabled = false;
+                    downloadBtn.disabled = false;
+                    showStatus(`Selected: ${patch.getName()}`, 'success');
+                });
+
+                patchList.appendChild(item);
+            });
+        }
+
+        // Play preview
+        playBtn.addEventListener('click', async () => {
+            if (!selectedPatch) return;
+
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                showStatus('Generating preview...', 'info');
+
+                const sampleRate = audioContext.sampleRate;
+                const samples = generateSamples(selectedPatch, 60, sampleRate, 1000);
+
+                const audioBuffer = audioContext.createBuffer(1, samples.length, sampleRate);
+                const channelData = audioBuffer.getChannelData(0);
+                channelData.set(samples);
+
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+
+                showStatus('Playing preview...', 'success');
+            } catch (error) {
+                showStatus(`Error playing audio: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        // Download multisample
+        downloadBtn.addEventListener('click', async () => {
+            if (!selectedPatch) return;
+
+            try {
+                const duration = parseInt(document.getElementById('duration').value);
+                const minNote = parseInt(document.getElementById('min-note').value);
+                const maxNote = parseInt(document.getElementById('max-note').value);
+                const increment = parseInt(document.getElementById('note-increment').value);
+
+                console.log('Parameters:', { duration, minNote, maxNote, increment });
+
+                if (minNote > maxNote) {
+                    showStatus('Error: Min note must be <= max note', 'error');
+                    return;
+                }
+
+                showStatus('Generating multisample...', 'info');
+                downloadBtn.disabled = true;
+
+                // Generate MIDI note array
+                const midiNotes = [];
+                for (let note = minNote; note < maxNote; note += increment) {
+                    midiNotes.push(note);
+                }
+                midiNotes.push(maxNote); // Always include the max note
+
+                const sampleRate = 44100;
+                console.log('Calling generateMultisample with:', {
+                    patch: selectedPatch.getName(),
+                    noteCount: midiNotes.length,
+                    sampleRate,
+                    duration
+                });
+                const zipBlob = await generateMultisample(
+                    selectedPatch,
+                    midiNotes,
+                    sampleRate,
+                    duration
+                );
+                console.log('ZIP generated successfully');
+
+                // Download the ZIP
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${selectedPatch.getName()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showStatus('Multisample downloaded!', 'success');
+                downloadBtn.disabled = false;
+            } catch (error) {
+                showStatus(`Error generating multisample: ${error.message}`, 'error');
+                console.error(error);
+                downloadBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

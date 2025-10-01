@@ -1,0 +1,31 @@
+{
+  "name": "tv7-js",
+  "version": "0.0.1",
+  "description": "Generate Elektron Tonverk-compatible multisamples from DX7 SYSEX patches in JavaScript",
+  "main": "src/tv7.js",
+  "type": "module",
+  "scripts": {
+    "dev": "npx http-server -p 8080",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "audio",
+    "fm",
+    "dx7",
+    "dsp",
+    "tonverk",
+    "synthesis"
+  ],
+  "author": "Tyler Neely",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spacejam/tv7-js"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
+  }
+}
