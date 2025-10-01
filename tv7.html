@@ -299,19 +299,28 @@
             console.log('generateMultisample called with:', { patch: patch.getName(), midiNotes, sampleRate, durationMs });
             const name = tonverkSanitize(patch.getName());
             const pitchBuffers = [];
-            const zones = [];
-            let runningSampleCount = 0;
 
+            // Generate all samples first
             for (const midiNote of midiNotes) {
                 console.log(`Generating samples for note ${midiNote}...`);
                 const samples = generateSamples(patch, midiNote, sampleRate, durationMs);
                 console.log(`Generated ${samples.length} samples`);
                 pitchBuffers.push(samples);
-                const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
+            }
+
+            // Find max length once, after all samples are generated
+            const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
+            console.log(`Max length: ${maxLength} samples`);
+
+            // Build zones with correct offsets
+            const zones = [];
+            let runningSampleCount = 0;
+
+            for (let i = 0; i < midiNotes.length; i++) {
                 const start = runningSampleCount;
                 const end = start + maxLength;
                 runningSampleCount = end;
-                zones.push({ pitch: midiNote, start, end });
+                zones.push({ pitch: midiNotes[i], start, end });
             }
 
             // Find peak amplitude across all buffers (iteratively to avoid stack overflow)

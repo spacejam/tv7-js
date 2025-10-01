@@ -143,22 +143,25 @@ export async function generateMultisample(patch, midiNotes, sampleRate, duration
 
     // Generate samples for each pitch
     const pitchBuffers = [];
-    const zones = [];
-
-    let runningSampleCount = 0;
 
     for (const midiNote of midiNotes) {
         const samples = generateSamples(patch, midiNote, sampleRate, durationMs);
         pitchBuffers.push(samples);
+    }
 
-        // Find max length (after generation, all will be padded to same length)
-        const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
+    // Find max length once, after all samples are generated
+    const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
 
+    // Build zones with correct offsets
+    const zones = [];
+    let runningSampleCount = 0;
+
+    for (let i = 0; i < midiNotes.length; i++) {
         const start = runningSampleCount;
         const end = start + maxLength;
         runningSampleCount = end;
 
-        zones.push({ pitch: midiNote, start, end });
+        zones.push({ pitch: midiNotes[i], start, end });
     }
 
     // Normalize all buffers (iteratively to avoid stack overflow with large arrays)
