@@ -5,12 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>tv7 - DX7 to Tonverk Multisample Generator</title>
     <style>
+        html {
+            position: relative;
+            min-height: 100%;
+            color: #efefef;
+            background: url('./helicopter_xs.jpg') #000 no-repeat top left fixed;
+            background-size: contain;
+        }
+
+        @media (min-width: 500px) {
+            html {
+                background: url('./helicopter.jpg') #000 no-repeat bottom left fixed;
+                background-size: contain;
+            }
+        }
+
         body {
             font-family: 'Courier New', monospace;
             max-width: 800px;
             margin: 40px auto;
             padding: 20px;
-            background: #000;
+            background: rgba(0, 0, 0, 0.80);
             color: #efefef;
         }
 
@@ -165,6 +180,7 @@
     <div class="section">
         <label for="sysex-file">Upload DX7 SYSEX Bank File (.syx)</label>
         <input type="file" id="sysex-file" accept=".syx">
+        <button id="load-example-btn" style="margin-top: 10px;">Load Example Bank (star1-fast-decay.syx)</button>
     </div>
 
     <div class="section" id="patch-section" style="display: none;">
@@ -326,6 +342,7 @@
 
         // DOM elements
         const sysexFileInput = document.getElementById('sysex-file');
+        const loadExampleBtn = document.getElementById('load-example-btn');
         const patchSection = document.getElementById('patch-section');
         const patchList = document.getElementById('patch-list');
         const controlsSection = document.getElementById('controls-section');
@@ -338,28 +355,47 @@
             statusDiv.className = type;
         }
 
-        // Handle SYSEX file upload
-        sysexFileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
+        async function loadSysexBytes(bytes, filename) {
             try {
                 showStatus('Loading SYSEX file...', 'info');
-                console.log('Loading file:', file.name, file.size, 'bytes');
-
-                const arrayBuffer = await file.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
-                console.log('File loaded, creating PatchBank...');
+                console.log('Loading file:', filename, bytes.length, 'bytes');
 
                 patchBank = new PatchBank(bytes);
                 console.log('PatchBank created with', patchBank.patches.length, 'patches');
 
                 displayPatches();
-                showStatus(`Loaded ${patchBank.patches.length} patches`, 'success');
+                showStatus(`Loaded ${patchBank.patches.length} patches from ${filename}`, 'success');
             } catch (error) {
                 showStatus(`Error loading SYSEX file: ${error.message}`, 'error');
                 console.error('Full error:', error);
                 console.error('Stack:', error.stack);
+            }
+        }
+
+        // Handle SYSEX file upload
+        sysexFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const arrayBuffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            await loadSysexBytes(bytes, file.name);
+        });
+
+        // Handle example bank loading
+        loadExampleBtn.addEventListener('click', async () => {
+            try {
+                showStatus('Loading example bank...', 'info');
+                const response = await fetch('./star1-fast-decay.syx');
+                if (!response.ok) {
+                    throw new Error(`Failed to load example: ${response.status}`);
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                await loadSysexBytes(bytes, 'star1-fast-decay.syx');
+            } catch (error) {
+                showStatus(`Error loading example: ${error.message}`, 'error');
+                console.error('Full error:', error);
             }
         });
 
