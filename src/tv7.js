@@ -141,43 +141,51 @@ trim-start = ${zone.start}
 export async function generateMultisample(patch, midiNotes, sampleRate, durationMs) {
     const name = tonverkSanitize(patch.getName());
 
-    // Generate samples for each pitch
-    const pitchBuffers = [];
+    // Use a Map to store buffers, keyed by MIDI note (mimics Rust's BTreeMap)
+    const bufs = new Map();
 
     for (const midiNote of midiNotes) {
-        const samples = generateSamples(patch, midiNote, sampleRate, durationMs);
-        pitchBuffers.push(samples);
+        let buf = generateSamples(patch, midiNote, sampleRate, durationMs);
+
+        // Find peak amplitude for normalization (per-buffer, like Rust)
+        let peak = 0.0;
+        for (let i = 0; i < buf.length; i++) {
+            const abs = Math.abs(buf[i]);
+            if (abs > peak) peak = abs;
+        }
+
+        // Normalize to -1.0 to 1.0 range if needed, with headroom
+        const normalizeFactor = peak > 0.8 ? 0.8 / peak : 1.0;
+        for (let i = 0; i < buf.length; i++) {
+            buf[i] *= normalizeFactor;
+        }
+
+        bufs.set(midiNote, buf);
     }
 
-    // Find max length once, after all samples are generated
-    const maxLength = Math.max(...pitchBuffers.map(buf => buf.length));
+    // Find the longest buffer
+    let maxLength = 0;
+    for (const buf of bufs.values()) {
+        if (buf.length > maxLength) maxLength = buf.length;
+    }
 
-    // Build zones with correct offsets
+    // Sort pitches in ascending order (mimics BTreeMap iteration order)
+    const sortedPitches = Array.from(bufs.keys()).sort((a, b) => a - b);
+
+    // Build ordered pitch buffers and zones
+    const pitchBuffers = [];
     const zones = [];
     let runningSampleCount = 0;
 
-    for (let i = 0; i < midiNotes.length; i++) {
+    for (const pitch of sortedPitches) {
+        const buf = bufs.get(pitch);
+        pitchBuffers.push(buf);
+
         const start = runningSampleCount;
         const end = start + maxLength;
         runningSampleCount = end;
 
-        zones.push({ pitch: midiNotes[i], start, end });
-    }
-
-    // Normalize all buffers (iteratively to avoid stack overflow with large arrays)
-    let peak = 0.0;
-    for (const buffer of pitchBuffers) {
-        for (let i = 0; i < buffer.length; i++) {
-            const abs = Math.abs(buffer[i]);
-            if (abs > peak) peak = abs;
-        }
-    }
-
-    const normalizeFactor = peak > 0.8 ? 0.8 / peak : 1.0;
-    for (const buffer of pitchBuffers) {
-        for (let i = 0; i < buffer.length; i++) {
-            buffer[i] *= normalizeFactor;
-        }
+        zones.push({ pitch, start, end });
     }
 
     // Generate WAV file
