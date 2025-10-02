@@ -178,9 +178,21 @@
     <h1>tv7 - DX7 to Tonverk Multisample Generator</h1>
 
     <div class="section">
-        <label for="sysex-file">Upload DX7 SYSEX Bank File (.syx)</label>
-        <input type="file" id="sysex-file" accept=".syx">
-        <button id="load-example-btn" style="margin-top: 10px;">Load Example Bank (star1-fast-decay.syx)</button>
+        <div style="display: flex; gap: 20px; align-items: flex-start;">
+            <div style="flex: 1;">
+                <label for="sysex-file">Upload DX7 SYSEX Bank File (.syx)</label>
+                <input type="file" id="sysex-file" accept=".syx">
+            </div>
+            <div style="flex: 0 0 300px;">
+                <label for="example-select">Or Load Example Bank</label>
+                <select id="example-select" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #FF5F52; background: #000; color: #efefef; border-radius: 3px; font-family: 'Courier New', monospace;">
+                    <option value="">-- Select Example --</option>
+                    <option value="star1-fast-decay.syx">star1-fast-decay.syx</option>
+                    <option value="Legowelt magic DX7 cart.syx">Legowelt magic DX7 cart.syx</option>
+                </select>
+                <button id="load-example-btn" style="width: 100%;">Load Selected Example</button>
+            </div>
+        </div>
     </div>
 
     <div class="section" id="patch-section" style="display: none;">
@@ -362,6 +374,7 @@
 
         // DOM elements
         const sysexFileInput = document.getElementById('sysex-file');
+        const exampleSelect = document.getElementById('example-select');
         const loadExampleBtn = document.getElementById('load-example-btn');
         const patchSection = document.getElementById('patch-section');
         const patchList = document.getElementById('patch-list');
@@ -404,15 +417,21 @@
 
         // Handle example bank loading
         loadExampleBtn.addEventListener('click', async () => {
+            const selectedFile = exampleSelect.value;
+            if (!selectedFile) {
+                showStatus('Please select an example bank first', 'error');
+                return;
+            }
+
             try {
-                showStatus('Loading example bank...', 'info');
-                const response = await fetch('./star1-fast-decay.syx');
+                showStatus(`Loading ${selectedFile}...`, 'info');
+                const response = await fetch(`./${selectedFile}`);
                 if (!response.ok) {
                     throw new Error(`Failed to load example: ${response.status}`);
                 }
                 const arrayBuffer = await response.arrayBuffer();
                 const bytes = new Uint8Array(arrayBuffer);
-                await loadSysexBytes(bytes, 'star1-fast-decay.syx');
+                await loadSysexBytes(bytes, selectedFile);
             } catch (error) {
                 showStatus(`Error loading example: ${error.message}`, 'error');
                 console.error('Full error:', error);
