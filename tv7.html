@@ -254,6 +254,11 @@
         <h3>Multisample Parameters</h3>
 
         <div class="param-group">
+            <label for="output-name">Output Multisample Name</label>
+            <input type="text" id="output-name" style="width: 100%; padding: 8px; border: 1px solid #FF5F52; background: #000; color: #efefef; border-radius: 3px; font-family: 'Courier New', monospace; box-sizing: border-box;">
+        </div>
+
+        <div class="param-group">
             <label>Key-On Duration (ms)</label>
             <input type="number" id="duration" value="2000" min="100" max="10000" step="100">
         </div>
@@ -357,9 +362,8 @@
             return toml;
         }
 
-        async function generateMultisample(patch, midiNotes, sampleRate, durationMs) {
-            console.log('generateMultisample called with:', { patch: patch.getName(), midiNotes, sampleRate, durationMs });
-            const name = tonverkSanitize(patch.getName());
+        async function generateMultisampleWithName(patch, name, midiNotes, sampleRate, durationMs) {
+            console.log('generateMultisampleWithName called with:', { patch: patch.getName(), name, midiNotes, sampleRate, durationMs });
 
             // Use a Map to store buffers, keyed by MIDI note (mimics Rust's BTreeMap)
             const bufs = new Map();
@@ -428,6 +432,7 @@
         const patchSection = document.getElementById('patch-section');
         const patchList = document.getElementById('patch-list');
         const controlsSection = document.getElementById('controls-section');
+        const outputNameInput = document.getElementById('output-name');
         const playBtn = document.getElementById('play-btn');
         const downloadBtn = document.getElementById('download-btn');
         const statusDiv = document.getElementById('status');
@@ -504,6 +509,10 @@
                     });
                     item.classList.add('selected');
                     selectedPatch = patch;
+
+                    // Set default output name to sanitized patch name
+                    outputNameInput.value = tonverkSanitize(patch.getName());
+
                     controlsSection.style.display = 'block';
                     playBtn.disabled = false;
                     downloadBtn.disabled = false;
@@ -553,11 +562,17 @@
                 const minNote = parseInt(document.getElementById('min-note').value);
                 const maxNote = parseInt(document.getElementById('max-note').value);
                 const increment = parseInt(document.getElementById('note-increment').value);
+                const outputName = outputNameInput.value.trim() || tonverkSanitize(selectedPatch.getName());
 
-                console.log('Parameters:', { duration, minNote, maxNote, increment });
+                console.log('Parameters:', { duration, minNote, maxNote, increment, outputName });
 
                 if (minNote > maxNote) {
                     showStatus('Error: Min note must be <= max note', 'error');
+                    return;
+                }
+
+                if (!outputName) {
+                    showStatus('Error: Output name cannot be empty', 'error');
                     return;
                 }
 
@@ -576,10 +591,12 @@
                     patch: selectedPatch.getName(),
                     noteCount: midiNotes.length,
                     sampleRate,
-                    duration
+                    duration,
+                    outputName
                 });
-                const zipBlob = await generateMultisample(
+                const zipBlob = await generateMultisampleWithName(
                     selectedPatch,
+                    outputName,
                     midiNotes,
                     sampleRate,
                     duration
@@ -590,7 +607,7 @@
                 const url = URL.createObjectURL(zipBlob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${selectedPatch.getName()}.zip`;
+                a.download = `${outputName}.zip`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
