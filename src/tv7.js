@@ -26,7 +26,8 @@ export function tonverkSanitize(input) {
                                         (code >= 97 && code <= 122);   // a-z
             return isAsciiAlphanumeric || allowedSymbols.includes(c) || allowedLetters.includes(c);
         })
-        .join('');
+        .join('')
+        .trim();
 }
 
 /**
