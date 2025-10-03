@@ -267,8 +267,10 @@
             <label>MIDI Note Range</label>
             <span class="param-label">Min:</span>
             <input type="number" id="min-note" value="60" min="0" max="127">
+            <span id="min-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C4)</span>
             <span class="param-label">Max:</span>
             <input type="number" id="max-note" value="108" min="0" max="127">
+            <span id="max-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C8)</span>
             <span class="param-label">Increment:</span>
             <input type="number" id="note-increment" value="3" min="1" max="12">
         </div>
@@ -435,6 +437,10 @@
         const patchList = document.getElementById('patch-list');
         const controlsSection = document.getElementById('controls-section');
         const outputNameInput = document.getElementById('output-name');
+        const minNoteInput = document.getElementById('min-note');
+        const maxNoteInput = document.getElementById('max-note');
+        const minNoteNameSpan = document.getElementById('min-note-name');
+        const maxNoteNameSpan = document.getElementById('max-note-name');
         const playBtn = document.getElementById('play-btn');
         const downloadBtn = document.getElementById('download-btn');
         const statusDiv = document.getElementById('status');
@@ -443,6 +449,26 @@
             statusDiv.textContent = message;
             statusDiv.className = type;
         }
+
+        // Convert MIDI note number to musical note name
+        function midiNoteToName(midiNote) {
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const octave = Math.floor(midiNote / 12) - 1;
+            const noteName = noteNames[midiNote % 12];
+            return `${noteName}${octave}`;
+        }
+
+        // Update note name displays
+        function updateNoteNames() {
+            const minNote = parseInt(minNoteInput.value);
+            const maxNote = parseInt(maxNoteInput.value);
+            minNoteNameSpan.textContent = `(${midiNoteToName(minNote)})`;
+            maxNoteNameSpan.textContent = `(${midiNoteToName(maxNote)})`;
+        }
+
+        // Add event listeners for note inputs
+        minNoteInput.addEventListener('input', updateNoteNames);
+        maxNoteInput.addEventListener('input', updateNoteNames);
 
         async function loadSysexBytes(bytes, filename) {
             try {
