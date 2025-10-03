@@ -302,7 +302,9 @@
                     const isAsciiAlphanumeric = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
                     return isAsciiAlphanumeric || allowedSymbols.includes(c) || allowedLetters.includes(c);
                 })
-                .join('');
+                .join('')
+                .replace(/\s+/g, ' ')  // Replace multiple contiguous spaces with single space
+                .trim();
         }
 
         function generateWav(pitchBuffers, sampleRate) {

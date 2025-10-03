@@ -27,6 +27,7 @@ export function tonverkSanitize(input) {
             return isAsciiAlphanumeric || allowedSymbols.includes(c) || allowedLetters.includes(c);
         })
         .join('')
+        .replace(/\s+/g, ' ')  // Replace multiple contiguous spaces with single space
         .trim();
 }
 
