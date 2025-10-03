@@ -576,6 +576,13 @@
                     return;
                 }
 
+                // Validate that the output name contains only allowed characters
+                const sanitizedOutputName = tonverkSanitize(outputName);
+                if (outputName !== sanitizedOutputName) {
+                    showStatus('Error: Output name contains invalid characters. Allowed: alphanumeric, ~!@#$%^&()_+-= åßäöüæøçñ', 'error');
+                    return;
+                }
+
                 showStatus('Generating multisample...', 'info');
                 downloadBtn.disabled = true;
 
