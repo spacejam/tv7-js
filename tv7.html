@@ -372,24 +372,13 @@
             // Use a Map to store buffers, keyed by MIDI note (mimics Rust's BTreeMap)
             const bufs = new Map();
 
+            // Target level: 0.5 for polyphonic playback headroom
+            const TARGET_LEVEL = 0.5;
+
             for (const midiNote of midiNotes) {
                 console.log(`Generating samples for note ${midiNote}...`);
-                let buf = generateSamples(patch, midiNote, sampleRate, durationMs);
+                const buf = generateSamples(patch, midiNote, sampleRate, durationMs, TARGET_LEVEL);
                 console.log(`Generated ${buf.length} samples`);
-
-                // Find peak amplitude for normalization (per-buffer, like Rust)
-                let peak = 0.0;
-                for (let i = 0; i < buf.length; i++) {
-                    const abs = Math.abs(buf[i]);
-                    if (abs > peak) peak = abs;
-                }
-
-                // Normalize to -1.0 to 1.0 range if needed, with headroom
-                const normalizeFactor = peak > 0.8 ? 0.8 / peak : 1.0;
-                for (let i = 0; i < buf.length; i++) {
-                    buf[i] *= normalizeFactor;
-                }
-
                 bufs.set(midiNote, buf);
             }
 
@@ -563,7 +552,9 @@
                 showStatus('Generating preview...', 'info');
 
                 const sampleRate = audioContext.sampleRate;
-                const samples = generateSamples(selectedPatch, 60, sampleRate, 1000);
+                // Target level: 0.5 for polyphonic playback headroom
+                const TARGET_LEVEL = 0.5;
+                const samples = generateSamples(selectedPatch, 60, sampleRate, 1000, TARGET_LEVEL);
 
                 const audioBuffer = audioContext.createBuffer(1, samples.length, sampleRate);
                 const channelData = audioBuffer.getChannelData(0);

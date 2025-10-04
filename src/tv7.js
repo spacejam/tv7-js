@@ -146,22 +146,11 @@ export async function generateMultisample(patch, midiNotes, sampleRate, duration
     // Use a Map to store buffers, keyed by MIDI note (mimics Rust's BTreeMap)
     const bufs = new Map();
 
+    // Target level: 0.5 for polyphonic playback headroom
+    const TARGET_LEVEL = 0.5;
+
     for (const midiNote of midiNotes) {
-        let buf = generateSamples(patch, midiNote, sampleRate, durationMs);
-
-        // Find peak amplitude for normalization (per-buffer, like Rust)
-        let peak = 0.0;
-        for (let i = 0; i < buf.length; i++) {
-            const abs = Math.abs(buf[i]);
-            if (abs > peak) peak = abs;
-        }
-
-        // Normalize to -1.0 to 1.0 range if needed, with headroom
-        const normalizeFactor = peak > 0.8 ? 0.8 / peak : 1.0;
-        for (let i = 0; i < buf.length; i++) {
-            buf[i] *= normalizeFactor;
-        }
-
+        const buf = generateSamples(patch, midiNote, sampleRate, durationMs, TARGET_LEVEL);
         bufs.set(midiNote, buf);
     }
 

@@ -48,9 +48,10 @@ const NUM_ALGORITHMS = 32;
  * @param {number} midiNote - MIDI note number (60 = C4)
  * @param {number} sampleRate - Sample rate in Hz
  * @param {number} durationMs - Duration in milliseconds
+ * @param {number} [targetLevel=null] - Target normalization level (e.g., 0.707946 for -3dBFS), or null for no normalization
  * @returns {Float32Array} - Array of audio samples
  */
-export function generateSamples(patch, midiNote, sampleRate, durationMs) {
+export function generateSamples(patch, midiNote, sampleRate, durationMs, targetLevel = null) {
     const MAX_BLOCK_SIZE = 24; // Match C++ implementation
     const nSamples = Math.floor((durationMs / 1000) * sampleRate);
     const silenceThreshold = 0.0001;
@@ -141,5 +142,23 @@ export function generateSamples(patch, midiNote, sampleRate, durationMs) {
         }
     }
 
-    return new Float32Array(output);
+    const result = new Float32Array(output);
+
+    // Normalize if target level is specified
+    if (targetLevel !== null && targetLevel > 0) {
+        let peak = 0.0;
+        for (let i = 0; i < result.length; i++) {
+            const abs = Math.abs(result[i]);
+            if (abs > peak) peak = abs;
+        }
+
+        if (peak > 0) {
+            const normalizeFactor = targetLevel / peak;
+            for (let i = 0; i < result.length; i++) {
+                result[i] *= normalizeFactor;
+            }
+        }
+    }
+
+    return result;
 }
