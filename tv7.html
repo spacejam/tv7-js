@@ -283,6 +283,8 @@
             <span id="max-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C8)</span>
             <span class="param-label">Increment:</span>
             <input type="number" id="note-increment" value="3" min="1" max="12">
+
+            <div id="keyboard" style="margin-top: 15px; display: flex; height: 80px; position: relative; user-select: none;"></div>
         </div>
 
         <div class="controls">
@@ -466,8 +468,103 @@
         }
 
         // Add event listeners for note inputs
-        minNoteInput.addEventListener('input', updateNoteNames);
-        maxNoteInput.addEventListener('input', updateNoteNames);
+        minNoteInput.addEventListener('input', () => {
+            updateNoteNames();
+            renderKeyboard();
+        });
+        maxNoteInput.addEventListener('input', () => {
+            updateNoteNames();
+            renderKeyboard();
+        });
+
+        // Render keyboard visualization
+        function renderKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            keyboard.innerHTML = '';
+
+            const minNote = parseInt(minNoteInput.value);
+            const maxNote = parseInt(maxNoteInput.value);
+
+            if (minNote > maxNote) return;
+
+            // Show full MIDI range (0-127)
+            const startNote = 0;
+            const endNote = 127;
+
+            // Count white keys for sizing (C=white, C#=black, etc.)
+            const whiteKeyCount = Array.from({length: 128}, (_, i) => i)
+                .filter(n => ![1, 3, 6, 8, 10].includes(n % 12))
+                .length;
+
+            const whiteKeyWidth = 100 / whiteKeyCount;
+            let whiteKeyIndex = 0;
+
+            for (let note = startNote; note <= endNote; note++) {
+                const noteName = note % 12;
+                const isBlack = [1, 3, 6, 8, 10].includes(noteName);
+                const isInRange = note >= minNote && note <= maxNote;
+
+                const key = document.createElement('div');
+                key.style.position = isBlack ? 'absolute' : 'relative';
+                key.style.height = isBlack ? '50px' : '80px';
+                key.style.cursor = 'pointer';
+                key.style.boxSizing = 'border-box';
+
+                if (isBlack) {
+                    key.style.width = `${whiteKeyWidth * 0.6}%`;
+                    key.style.background = '#000';
+                    key.style.border = '1px solid #666';
+                    key.style.zIndex = '2';
+                    // Position black keys between white keys
+                    key.style.left = `${whiteKeyIndex * whiteKeyWidth - whiteKeyWidth * 0.3}%`;
+
+                    if (isInRange) {
+                        key.style.outline = '2px solid #FF5F52';
+                        key.style.outlineOffset = '-2px';
+                    }
+                } else {
+                    key.style.width = `${whiteKeyWidth}%`;
+                    key.style.background = '#fff';
+                    key.style.border = '1px solid #000';
+                    key.style.zIndex = '1';
+
+                    if (isInRange) {
+                        key.style.background = '#ffcccc';
+                    }
+
+                    whiteKeyIndex++;
+                }
+
+                key.title = midiNoteToName(note);
+
+                key.addEventListener('click', async () => {
+                    if (!selectedPatch) return;
+
+                    try {
+                        if (!audioContext) {
+                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        }
+
+                        const sampleRate = audioContext.sampleRate;
+                        const TARGET_LEVEL = 0.5;
+                        const samples = generateSamples(selectedPatch, note, sampleRate, 500, TARGET_LEVEL);
+
+                        const audioBuffer = audioContext.createBuffer(1, samples.length, sampleRate);
+                        const channelData = audioBuffer.getChannelData(0);
+                        channelData.set(samples);
+
+                        const source = audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(audioContext.destination);
+                        source.start();
+                    } catch (error) {
+                        console.error('Error playing note:', error);
+                    }
+                });
+
+                keyboard.appendChild(key);
+            }
+        }
 
         async function loadSysexBytes(bytes, filename) {
             try {
@@ -543,6 +640,7 @@
                     controlsSection.style.display = 'block';
                     playBtn.disabled = false;
                     downloadBtn.disabled = false;
+                    renderKeyboard(); // Render keyboard when patch is selected
                     showStatus(`Selected: ${patch.getName()}`, 'success');
                 });
 
