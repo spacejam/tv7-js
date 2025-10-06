@@ -275,20 +275,27 @@
 
         <div class="param-group">
             <label>MIDI Note Range</label>
-            <span class="param-label">Min:</span>
-            <input type="number" id="min-note" value="60" min="0" max="127">
-            <span id="min-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C4)</span>
-            <span class="param-label">Max:</span>
-            <input type="number" id="max-note" value="108" min="0" max="127">
-            <span id="max-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C8)</span>
-            <span class="param-label">Increment:</span>
-            <input type="number" id="note-increment" value="3" min="1" max="12">
+            <div style="margin-bottom: 10px;">
+                <span class="param-label">Min:</span>
+                <input type="number" id="min-note" value="60" min="0" max="127">
+                <span id="min-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C4)</span>
+                <button id="play-min-btn" disabled style="margin-left: 10px; padding: 5px 10px;">▶ Preview Min</button>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <span class="param-label">Max:</span>
+                <input type="number" id="max-note" value="108" min="0" max="127">
+                <span id="max-note-name" class="param-label" style="color: #FF5F52; margin-left: 5px;">(C8)</span>
+                <button id="play-max-btn" disabled style="margin-left: 10px; padding: 5px 10px;">▶ Preview Max</button>
+            </div>
+            <div>
+                <span class="param-label">Increment:</span>
+                <input type="number" id="note-increment" value="3" min="1" max="12">
+            </div>
 
             <div id="keyboard" style="margin-top: 15px; display: flex; height: 80px; position: relative; user-select: none;"></div>
         </div>
 
         <div class="controls">
-            <button id="play-btn" disabled>Play Preview (Note 60)</button>
             <button id="download-btn" disabled>Download Multisample</button>
         </div>
     </div>
@@ -442,7 +449,8 @@
         const maxNoteInput = document.getElementById('max-note');
         const minNoteNameSpan = document.getElementById('min-note-name');
         const maxNoteNameSpan = document.getElementById('max-note-name');
-        const playBtn = document.getElementById('play-btn');
+        const playMinBtn = document.getElementById('play-min-btn');
+        const playMaxBtn = document.getElementById('play-max-btn');
         const downloadBtn = document.getElementById('download-btn');
         const statusDiv = document.getElementById('status');
 
@@ -638,7 +646,8 @@
                     outputNameInput.value = tonverkSanitize(patch.getName());
 
                     controlsSection.style.display = 'block';
-                    playBtn.disabled = false;
+                    playMinBtn.disabled = false;
+                    playMaxBtn.disabled = false;
                     downloadBtn.disabled = false;
                     renderKeyboard(); // Render keyboard when patch is selected
                     showStatus(`Selected: ${patch.getName()}`, 'success');
@@ -648,8 +657,8 @@
             });
         }
 
-        // Play preview
-        playBtn.addEventListener('click', async () => {
+        // Play min note preview
+        playMinBtn.addEventListener('click', async () => {
             if (!selectedPatch) return;
 
             try {
@@ -657,12 +666,44 @@
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 }
 
-                showStatus('Generating preview...', 'info');
+                const minNote = parseInt(minNoteInput.value);
+                showStatus(`Playing min note (${midiNoteToName(minNote)})...`, 'info');
 
                 const sampleRate = audioContext.sampleRate;
-                // Target level: 0.5 for polyphonic playback headroom
                 const TARGET_LEVEL = 0.5;
-                const samples = generateSamples(selectedPatch, 60, sampleRate, 1000, TARGET_LEVEL);
+                const samples = generateSamples(selectedPatch, minNote, sampleRate, 1000, TARGET_LEVEL);
+
+                const audioBuffer = audioContext.createBuffer(1, samples.length, sampleRate);
+                const channelData = audioBuffer.getChannelData(0);
+                channelData.set(samples);
+
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+
+                showStatus('Playing preview...', 'success');
+            } catch (error) {
+                showStatus(`Error playing audio: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        // Play max note preview
+        playMaxBtn.addEventListener('click', async () => {
+            if (!selectedPatch) return;
+
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                const maxNote = parseInt(maxNoteInput.value);
+                showStatus(`Playing max note (${midiNoteToName(maxNote)})...`, 'info');
+
+                const sampleRate = audioContext.sampleRate;
+                const TARGET_LEVEL = 0.5;
+                const samples = generateSamples(selectedPatch, maxNote, sampleRate, 1000, TARGET_LEVEL);
 
                 const audioBuffer = audioContext.createBuffer(1, samples.length, sampleRate);
                 const channelData = audioBuffer.getChannelData(0);
